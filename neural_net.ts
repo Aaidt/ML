@@ -82,7 +82,7 @@ function dot(A: number[][], B: number[][]): number[][] {
     const rowsB = B.length;
     const colsB = B[0].length;
 
-    if(colsA !== rowsB){
+    if (colsA !== rowsB) {
         throw new Error("Matrix shap mismatch in dot()")
     }
     const arr: number[][] = Array.from({ length: rowsA }, () =>
@@ -131,3 +131,174 @@ for (let i = 0; i < X.length; i++) {
     (Target: ${Y[i][0]}))`)
 }
 console.log("Predictions are garbage — the network hasn't learned anything yet.")
+
+function mean(A: number[]): number {
+    return A.reduce((a, b) => a + b, 0) / A.length;
+}
+
+function flatten(A: number[][]): number[] {
+    return A.reduce((flat, next) => flat.concat(next), [])
+}
+
+function compute_loss(y_true: number[][], y_pred: number[][]): number {
+    const errors = y_true.map((row, i) =>
+        row.map((val, j) => (val - y_pred[i][j]) ** 2)
+    )
+    return mean(flatten(errors));
+}
+
+const initial_loss = compute_loss(Y, a_output);
+console.log(`Initial loss (untrained): ${initial_loss.toFixed(2)}`)
+console.log("This number should decrease as we train")
+
+function subtract(A: number[][], B: number[][]): number[][] {
+    const rows = A.length;
+    const cols = A[0].length;
+
+    if (rows !== B.length || cols !== B[0].length) {
+        throw new Error("Matrix shape mismatch in subtract()")
+    }
+
+    return A.map((row, i) =>
+        row.map((val, j) => val - B[i][j])
+    );
+}
+
+function transpose(A: number[][]): number[][] {
+    const rows = A.length;
+    const cols = A[0].length;
+    const arr: number[][] = Array.from({ length: cols }, () =>
+        Array(rows).fill(0)
+    )
+    for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols; j++) {
+            arr[j][i] = A[i][j];
+        }
+    }
+    return arr;
+}
+
+function divide_scalar(A: number[][], scalar: number): number[][] {
+    return A.map(row =>
+        row.map(val => val / scalar)
+    )
+}
+
+function multiply_scalar(A: number[][], scalar: number): number[][] {
+    return A.map(row =>
+        row.map(val => val * scalar)
+    )
+}
+
+function hadamard(A: number[][], B: number[][]): number[][] {
+    return A.map((row, i) =>
+        row.map((val, j) => val * B[i][j])
+    );
+}
+
+function backward_pass(
+    x: number[][],
+    y: number[][],
+    z_hidden: number[][],
+    a_hidden: number[][],
+    z_output: number[][],
+    a_output: number[][],
+    learning_rate: number
+) {
+    const m = x.length;
+
+    // ----- OUTPUT LAYER -----
+    const output_error = subtract(a_output, y);
+    const output_delta = hadamard(
+        output_error,
+        sigmoid_derivative(z_output)
+    );
+    const grad_weights_hidden_output = divide_scalar(
+        dot(transpose(a_hidden), output_delta),
+        m
+    );
+    const grad_bias_output = divide_scalar(
+        [flatten(output_delta)],
+        m
+    );
+
+    // ----- HIDDEN LAYER -----
+    const hidden_error = dot(
+        output_delta,
+        transpose(weights_hidden_output)
+    );
+    const hidden_delta = hadamard(
+        hidden_error,
+        sigmoid_derivative(z_hidden)
+    );
+    const grad_weights_input_hidden = divide_scalar(
+        dot(transpose(x), hidden_delta),
+        m
+    );
+    const grad_bias_hidden = divide_scalar(
+        [flatten(hidden_delta)],
+        m
+    );
+
+    // ----- UPDATE WEIGHTS -----
+    weights_hidden_output = subtract(
+        weights_hidden_output,
+        multiply_scalar(grad_weights_hidden_output, learning_rate)
+    );
+    bias_output = subtract(
+        bias_output,
+        multiply_scalar(grad_bias_output, learning_rate)
+    );
+    weights_input_hidden = subtract(
+        weights_input_hidden,
+        multiply_scalar(grad_weights_input_hidden, learning_rate)
+    );
+    bias_hidden = subtract(
+        bias_hidden,
+        multiply_scalar(grad_bias_hidden, learning_rate)
+    );
+}
+
+let learning_rate = 2.0;
+let iterations = 10000;
+let loss_history = [];
+console.log("Training started...")
+console.log("-------------------------------------------------");
+for (let i = 0; i < iterations; i++) {
+    const { z_hidden, a_hidden, z_output, a_output } = forward_pass(X);
+    const loss = compute_loss(Y, a_output);
+    loss_history.push(loss);
+    backward_pass(X, Y, z_hidden, a_hidden, z_output, a_output, learning_rate)
+    if (i % 2000 === 0) {
+        console.log(`Iteration ${i} | Loss: ${loss.toFixed(3)}`)
+    }
+}
+
+const { a_output: final_predictions } = forward_pass(X);
+
+console.log("Final Results After Training:");
+console.log("-".repeat(50));
+console.log(
+    "Input".padEnd(12),
+    "Target".padEnd(10),
+    "Prediction".padEnd(12),
+    "Rounded".padEnd(10)
+);
+console.log("-".repeat(50));
+
+for (let i = 0; i < X.length; i++) {
+    const pred = final_predictions[i][0];
+    const rounded = Math.round(pred);
+    const status = rounded === Y[i][0] ? "✓" : "✗";
+
+    console.log(
+        JSON.stringify(X[i]).padEnd(12),
+        String(Y[i][0]).padEnd(10),
+        pred.toFixed(4).padEnd(12),
+        String(rounded).padEnd(10),
+        status
+    );
+}
+
+console.log("-".repeat(50));
+console.log("\nThe network learned XOR from random weights.");
