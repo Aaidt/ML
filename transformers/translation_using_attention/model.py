@@ -4,6 +4,7 @@ import torch.nn as nn
 
 
 class InputEmbeddings(nn.Module):
+
     def __init__(self, d_model: int, vocab_size: int):
         super().__init__()
         self.d_model = d_model
@@ -13,15 +14,15 @@ class InputEmbeddings(nn.Module):
     def forward(self, x):
         return self.embedding(x) * math.sqrt(self.d_model)
 
-
 class PositionalEncoding(nn.Module):
+
     def __init__(self, d_model: int, seq_len: int, dropout: float) -> None:
         super().__init__()
         self.d_model = d_model
         self.seq_len = seq_len
         self.dropout = nn.Dropout(dropout)
 
-        # create a positional encoding matrix of shape (seq_len, d_model) -> this represents all the tokens(seq_len) and the 512dims of the model
+        # create a positional encoding matrix of shape (seq_len, d_model) --> this represents all the tokens(seq_len) and the 512dims of the model
         pe = torch.zeros(seq_len, d_model)
 
         # create a vector for representing the positions
@@ -39,8 +40,8 @@ class PositionalEncoding(nn.Module):
         x = x + (self.pe[:, : x.shape(1), :]).requires_grad(False)
         return self.dropout(x)
 
-
 class LayerNormalization(nn.Module):
+
     def __init__(self, eps: float = 10**-6) -> None:
         super().__init__()
         self.eps = eps
@@ -52,8 +53,8 @@ class LayerNormalization(nn.Module):
         std = x.std(dims=-1, keepdims=True)
         return self.alpha * (x - mean) / (std + self.eps) + self.bias
 
-
 class FeedForwardBlock(nn.Module):
+
     def __init__(self, d_model: int, d_ff: int, dropout: float) -> None:
         super().__init__()
         self.Linear_1 = nn.Linear(d_model, d_ff)
@@ -63,8 +64,8 @@ class FeedForwardBlock(nn.Module):
     def forward(self, x):
         return self.Linear_2(self.dropout(torch.relu(self.Linear_1(x))))
 
-
 class MultiHeadAttentionBlock(nn.Module):
+
     def __init__(self, d_model: int, h: int, dropout: float) -> None:
         super().__init__()
         self.d_model = d_model
@@ -122,7 +123,7 @@ class ResidualConnection(nn.Module):
         return x + self.dropout(sublayer(self.norm(x)))
     
 class EncoderBlock(nn.Module):
-
+    
     def __init__(self, self_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
         super().__init__()
         self.self_attention_block = self_attention_block
@@ -183,7 +184,6 @@ class ProjectionLayer(nn.Module):
         # (batch, seq_len, d_model) --> (batch, seq_len, vocab_size)
         return torch.log_softmax(self.proj(x), dims = -1)
     
-
 class Transformer(nn.Module):
 
     def __init__(self, decoder: Decoder, encoder: Encoder, src_embed: InputEmbeddings, tgt_embed: InputEmbeddings,
@@ -210,8 +210,7 @@ class Transformer(nn.Module):
     def project(self, x):
         return self.projection_layer(x)
 
-
-def build_transformer(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int, 
+def build_transformer(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int,     
                     d_model: int = 512, N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer:
     # embedding layers
     src_embed = InputEmbeddings(d_model, src_vocab_size)
