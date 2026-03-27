@@ -136,12 +136,96 @@ from typing import Union
 
 x = np.array([[1, 2, 3], 
      [4, 5, 6]])  # Shape (2, 3)
-axis = 1  # Reduce along columns (second dimension)
+axis = 0  # Reduce along columns (second dimension)
 
 def tensor_reductions(x: np.ndarray, axis: int) -> Dict[str, Union[np.ndarray, float]]:
     """
     Computes sum, mean, max, argmax along axis.
     """
     # Your code here
-    if(axis == 1):
+    sum = np.sum(x, axis=axis)
+
+    mean = np.mean(x, axis=axis)
+
+    max = np.max(x, axis=axis)
+
+    argmax = np.argmax(x, axis=axis)
+
+    results = {
+        "sum": sum,
+        "mean": mean,
+        "max": max,
+        "argmax": argmax
+    }
+
+    return results
+
+# print(tensor_reductions(x, axis))
+
+#########################################################################################################
+
+# Vector norms
+
+x = np.array([[3, 4],      # First vector: (3, 4)
+     [1, -1]])     # Second vector: (1, -1)
+
+def compute_norms(x: np.ndarray) -> Dict[str, np.ndarray]:
+    """
+    Computes L1 and L2 norms for a batch of vectors.
+    
+    Args:
+        x: Input matrix of shape (N, D)
         
+    Returns:
+        Dictionary with keys "l1" and "l2", each containing an array of shape (N,)
+    """
+    # Your code here
+    l1_norm = np.linalg.norm(x, ord=1, axis=1)
+    l2_norm = np.linalg.norm(x, ord=2, axis=1)
+
+    results = {
+        "l1_norm": l1_norm,
+        "l2_norm": l2_norm
+    }
+
+    return results
+
+# print(compute_norms(x))
+
+#########################################################################################################
+
+# vector_products
+
+a = np.array([[1, 0, 0]])  # Unit vector along x-axis
+b = np.array([[0, 1, 0]])  # Unit vector along y-axis
+
+def vector_products(a: np.ndarray, b: np.ndarray) -> Dict[str, np.ndarray]:
+    """
+    Computes dot and cross products for batches of 3D vectors.
+    
+    Args:
+        a: Shape (N, 3)
+        b: Shape (N, 3)
+        
+    Returns:
+        Dict with "dot" (N,) and "cross" (N, 3)
+    """
+    # Your code here
+    # dot = np.dot(a, b)
+    # dot = a @ b
+
+    dot = np.sum(a * b, axis=1)
+
+    cross = np.cross(a, b)
+
+    results = {
+        "dot": dot,
+        "cross": cross
+    }
+
+    return results
+
+# print(vector_products(a, b))
+
+#########################################################################################################
+
