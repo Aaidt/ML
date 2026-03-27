@@ -229,3 +229,39 @@ def vector_products(a: np.ndarray, b: np.ndarray) -> Dict[str, np.ndarray]:
 
 #########################################################################################################
 
+# einsum
+
+A = np.array([[1, 2],     # Shape (2, 2) - N=2, D=2
+     [3, 4]])
+B = np.array([[5, 6],     # Shape (2, 2) - D=2, M=2
+     [7, 8]])
+
+# Input: 2 batches, 2 heads, 3 sequence length, 4 dimensions
+b, h, s, d = 2, 2, 3, 4
+
+Q = np.random.randn(b, h, s, d)  # Shape (2, 2, 3, 4)
+K = np.random.randn(b, h, s, d)  # Shape (2, 2, 3, 4)
+
+def einsum_ops(A: np.ndarray, B: np.ndarray, Q: np.ndarray, K: np.ndarray) -> Dict[str, Union[np.ndarray, float]]:
+
+    transpose = np.einsum("ij->ji", A)
+
+    sum = np.einsum("ij->", A)
+
+    col_sum = np.einsum("ij->j", A)
+
+    matmul = np.einsum("ik,kj->ij", A, B)
+
+    batch_matmul = np.einsum("bhid,bhjd->bhij", Q, K)
+
+    results = {
+        "transpose": transpose,
+        "sum": sum,
+        "col_sum": col_sum,
+        "matmul": matmul,
+        "batch_matmul": batch_matmul
+    }
+
+    return results
+
+print(einsum_ops(A, B, Q, K))
