@@ -1,4 +1,5 @@
 # Tensor broadcasting
+from math import inf
 import numpy as np
 
 def broadcast_ops(X: np.ndarray, b: np.ndarray, w: np.ndarray) -> np.ndarray:
@@ -264,4 +265,78 @@ def einsum_ops(A: np.ndarray, B: np.ndarray, Q: np.ndarray, K: np.ndarray) -> Di
 
     return results
 
-print(einsum_ops(A, B, Q, K))
+# print(einsum_ops(A, B, Q, K))
+
+#########################################################################################################
+
+# gradient of sum
+from typing import Tuple
+
+def grad_sum(grad_y: float, x_shape: Tuple[int]) -> np.ndarray:
+    """
+    Computes gradient of x given gradient of sum(x).
+    
+    Args:
+        grad_y: Scalar gradient dL/dy
+        x_shape: Shape of the input tensor x
+        
+    Returns:
+        Gradient dL/dx of shape x_shape
+    """
+    return np.full(x_shape, grad_y)
+
+#########################################################################################################
+
+# gradient of matrix multiplication
+# Forward pass
+A = np.array([[1, 2],     # Shape (2, 2) - M=2, K=2
+     [3, 4]])
+
+B = np.array([[5, 6],     # Shape (2, 2) - K=2, N=2
+     [7, 8]])
+
+C = np.array([[19, 22],   # Shape (2, 2) - M=2, N=2
+             [43, 50]])
+
+# Backward pass
+grad_C = np.array([[0.1, 0.2],    # Upstream gradient (M×N)
+          [0.3, 0.4]])
+        
+def grad_matmul(grad_c: np.ndarray, A: np.ndarray, B: np.ndarray) -> Dict[str, np.ndarray]:
+
+    grad_a = grad_c @ B.T
+
+    grad_b = A.T @ grad_c
+
+    results = {
+        "grad_a": grad_a,
+        "grad_b": grad_b
+    }
+
+    return results
+
+# print(grad_matmul(grad_C, A, B))
+
+#########################################################################################################
+
+# Softmax
+
+x = np.array([[2.0, 1.0, 0.1],    # Sample 0: class 0 has highest logit
+     [0.5, 2.5, 0.3]])
+
+def softmax(x: np.ndarray) -> np.ndarray:
+
+    max = np.max(x, axis=1, keepdims=True)
+    x_shifted = x - max
+    exp_x = np.exp(x_shifted)
+    sum = np.sum(exp_x)
+
+    softmax = exp_x / sum
+
+    return softmax
+
+# print(softmax(x))
+
+#########################################################################################################
+
+# 
