@@ -339,4 +339,17 @@ def softmax(x: np.ndarray) -> np.ndarray:
 
 #########################################################################################################
 
-# 
+# log-sum-exp
+x = np.array([1000, 1001, 1002])
+
+def log_sum_exp(x: np.ndarray)-> np.ndarray:
+
+    max = np.max(x, axis=0, keepdims=True)
+
+    log = np.log(np.sum(np.exp(x - max)))
+
+    result = max + log
+
+    return result
+
+print(log_sum_exp(x))
