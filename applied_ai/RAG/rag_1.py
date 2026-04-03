@@ -1,12 +1,11 @@
-from typing import Dict, List
-import re
 import os
+from typing_extensions import Doc
 import chromadb
+from chromadb.api.types import Document
 import dotenv
+from typing import List
 from rank_bm25 import BM25Okapi
-
 from openai import OpenAI
-
 from dataset import DOCUMENTS
 
 dotenv.load_dotenv()
@@ -29,26 +28,25 @@ except Exception as e:
 collection = chroma.create_collection("naive_rag", metadata={"hnsw:space": "cosine"})
 
 
-def recursve_chunking(text: str, max_size: int = 200) -> List[str]:
+def chunk_recursive(text: str, max_size: int = 200) -> List[str]:
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+
     chunks = []
-
-    paragraphs = text.split("\n\n")
-
     for para in paragraphs:
-        if len(para.split()) < max_size:
+        words = para.split()
+        if len(words) <= max_size:
             chunks.append(para)
         else:
-            sentences = re.split(r"[.!?]\s+", para)
+            sentences = para.replace(". ", ".\n").split("\n")
             current, current_len = [], 0
-
             for sent in sentences:
-                if current_len + len(sent) >= max_size and current:
+                sent_len = len(sent.split())
+                if current_len + sent_len > max_size and current:
                     chunks.append(" ".join(current))
-                    current, current_len = [sent], len(sent)
+                    current, current_len = [sent], sent_len
                 else:
-                    current.append(" ".join(sent))
-                    current_len += len(sent)
-
+                    current.append(sent)
+                    current_len += sent_len
             if current:
                 chunks.append(" ".join(current))
 
@@ -59,7 +57,7 @@ all_chunks = []
 chunk_meta = []
 
 for doc in DOCUMENTS:
-    chunks = recursve_chunking(doc["content"])
+    chunks = chunk_recursive(doc["content"])
     all_chunks.append(" ".join(chunks))
     chunk_meta.append({"title": doc["title"], "source": doc["source"]})
 
@@ -73,7 +71,6 @@ def get_embeddings(
 
 
 embs = get_embeddings(all_chunks)
-
 collection.add(
     ids=[f"chunk_{i}" for i in range(len(all_chunks))],
     embeddings=embs,
@@ -82,12 +79,43 @@ collection.add(
 )
 
 
-def bm25(text: str, k: int = 5):
-    tokens = re.findall(r"\s", text.lower())
-    return tokens[:k]
+# def reciprocal_rank_fusion(
+#     semantic: List[List[float]], keyword: List[List[float]], k: int = 5
+# ) -> Dict:
+#     return {}
 
 
-def reciprocal_rank_fusion(
-    semantic: List[List[float]], keyword: List[List[float]], k: int = 5
-) -> Dict:
-    return {}
+def contextual_retrieval(chunk: str, full_doc: str, title: str) -> str:
+    """Prepend LLM-generated context to a chunk before embedding."""
+    resp = oai.chat.completions.create(
+        model="openrouter/free",
+        max_tokens=150,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""<document title="{title}">
+                {full_doc}
+                </document>
+
+                Here is a chunk from that document:
+                <chunk>
+                {chunk}
+                </chunk>
+
+                Write a SHORT (2-3 sentence) context that situates this chunk within the document.
+                Include: which document, what section/topic, key entities or time periods.
+                This will be prepended to the chunk for search.
+
+                Context:""",
+            }
+        ],
+    )
+    ctx = resp.choices[0].message.content
+    return f"{ctx}\n\n{chunk}"
+
+
+chunk = all_chunks[0]
+doc = DOCUMENTS[0]["content"]
+title = DOCUMENTS[0]["title"]
+
+print(contextual_retrieval(chunk, doc, title))
