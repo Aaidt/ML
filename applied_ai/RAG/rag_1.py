@@ -1,12 +1,12 @@
 import os
-from typing_extensions import Doc
+import re
 import chromadb
-from chromadb.api.types import Document
 import dotenv
-from typing import List
+from typing import Dict, List, Sequence, Tuple
 from rank_bm25 import BM25Okapi
 from openai import OpenAI
 from dataset import DOCUMENTS
+from sentence_transformers import CrossEncoder
 
 dotenv.load_dotenv()
 key = os.environ["OPENROUTER_API_KEY"]
@@ -70,6 +70,10 @@ def get_embeddings(
     return [d.embedding for d in response.data]
 
 
+def get_embedding(text: str) -> List[float]:
+    return get_embeddings([text])[0]
+
+
 embs = get_embeddings(all_chunks)
 collection.add(
     ids=[f"chunk_{i}" for i in range(len(all_chunks))],
@@ -79,13 +83,11 @@ collection.add(
 )
 
 
-# def reciprocal_rank_fusion(
-#     semantic: List[List[float]], keyword: List[List[float]], k: int = 5
-# ) -> Dict:
-#     return {}
+def tokenize(text: str) -> List[str]:
+    return re.findall(r"\w+", text)
 
 
-def contextual_retrieval(chunk: str, full_doc: str, title: str) -> str:
+def situate_context(chunk: str, full_doc: str, title: str) -> str:
     """Prepend LLM-generated context to a chunk before embedding."""
     resp = oai.chat.completions.create(
         model="openrouter/free",
@@ -114,8 +116,108 @@ def contextual_retrieval(chunk: str, full_doc: str, title: str) -> str:
     return f"{ctx}\n\n{chunk}"
 
 
-chunk = all_chunks[0]
-doc = DOCUMENTS[0]["content"]
-title = DOCUMENTS[0]["title"]
+print("Contextualizing chunks... (LLM call per chunk, patience)")
+ctx_chunks = []
+for i, (chunk, meta) in enumerate(zip(all_chunks, chunk_meta)):
+    doc = next(d for d in DOCUMENTS if d["title"] == meta["title"])
+    ctx_chunks.append(situate_context(chunk, doc["content"], doc["title"]))
+    if (i + 1) % 5 == 0:
+        print(f"  {i + 1}/{len(all_chunks)} done")
 
-print(contextual_retrieval(chunk, doc, title))
+print(f"\n✅ Contextualized {len(ctx_chunks)} chunks")
+
+
+def reciprocal_rank_fusion(
+    semantic: List[Tuple[int, float]], keyword: Sequence[Tuple[int, float]], k: int = 60
+) -> List[Tuple[int, float]]:
+    scores = {}
+
+    for rank, (idx, _) in enumerate(semantic):
+        scores[idx] += 1 / (k + rank + 1)
+
+    for rank, (idx, _) in enumerate(keyword):
+        scores[idx] += 1 / (k + rank + 1)
+
+    return sorted(scores, key=lambda x: x[1], reverse=True)
+
+
+ctx_bm25 = BM25Okapi([tokenize(c) for c in ctx_chunks])
+
+
+def ctx_hybrid_search(user_query: str, k: int = 10) -> List[Dict]:
+    sem = collection.query(query_embeddings=[get_embedding(user_query)], n_results=20)
+    sem_ranked = [
+        (int(id.split("_")[1]), dist)
+        for id, dist in zip(sem["ids"][0], sem["distances"][0])
+    ]
+
+    scores = ctx_bm25.get_scores(tokenize(user_query))
+    bm25_ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:k]
+
+    fused = reciprocal_rank_fusion(sem_ranked, bm25_ranked)
+
+    return [
+        {
+            "chunk": ctx_chunks[idx],
+            "original": all_chunks[idx],
+            "meta": chunk_meta[idx],
+            "score": sc,
+        }
+        for idx, sc in fused[:k]
+    ]
+
+
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+print("✅ Loaded cross-encoder reranker")
+
+
+def rerank(question: str, results: List[Dict], top_k: int = 3) -> List[Dict]:
+    """Rerank results with cross-encoder."""
+    pairs = [(question, r["chunk"]) for r in results]
+    scores = reranker.predict(pairs)
+    for r, s in zip(results, scores):
+        r["rerank_score"] = float(s)
+    return sorted(results, key=lambda x: x["rerank_score"], reverse=True)[:top_k]
+
+
+def full_rag(question: str, verbose: bool = True) -> str | None:
+    """
+    The full pipeline:
+    Contextual chunks → Hybrid search (top 10) → Rerank (top 3) → Generate
+    """
+    results = ctx_hybrid_search(question, k=10)
+    top = rerank(question, results, top_k=3)
+
+    if verbose:
+        print(f"\n🔍 Query: '{question}'")
+        print("\nTop 3 after reranking:")
+        for i, r in enumerate(top):
+            print(f"  [{i + 1}] rerank={r['rerank_score']:.3f} | {r['meta']['title']}")
+            print(f"      {r['chunk'][:100]}...")
+
+    context = "\n".join(f"[Source: {r['meta']['title']}]\n{r['chunk']}" for r in top)
+
+    resp = oai.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""Answer based ONLY on the context below.
+                If the context doesn't have the answer, say \"I don't have enough information.\"
+                Cite your sources.
+
+                Context:
+                {context}
+
+                Question: {question}
+
+                Answer:""",
+            }
+        ],
+    )
+
+    answer = resp.choices[0].message.content
+    if verbose:
+        print(f"\n💬 Answer:\n{answer}")
+    return answer
