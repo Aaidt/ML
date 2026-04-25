@@ -1,4 +1,6 @@
 import os
+import time
+import subprocess
 import requests
 import asyncio
 from dotenv import load_dotenv
@@ -49,5 +51,14 @@ async def parse_document(file:str):
 
     print("Full markdown:", result.markdown_full)
 
-
 # asyncio.run(parse_document("./Recursive Language Model.pdf"))
+
+def repl(code:str, timeout:int=5) -> str:
+    result = subprocess.run(["python3", "-c", code], capture_output=True, text=True, timeout=timeout)
+    return result.stdout.strip() if result.returncode == 0 else result.stderr
+
+start = time.perf_counter()
+repl("print('just checking if this works')")
+end = time.perf_counter()
+
+print("time taken to repl: ", end-start)
