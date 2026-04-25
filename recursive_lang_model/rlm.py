@@ -2,63 +2,104 @@ import os
 import time
 import subprocess
 import requests
-import asyncio
 from dotenv import load_dotenv
 from llama_cloud import AsyncLlamaCloud
+# import asyncio
 
 load_dotenv()
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-LLAMA_CLOUD_API_KEY = os.environ.get("LLAMA_CLOUD_API_KEY")
-try:
-    if not OPENROUTER_API_KEY or not LLAMA_CLOUD_API_KEY:
-        raise ValueError("API keys are missing")
-except ValueError as e:
-    print("Error: ", e)
+RLM_SYSTEM_PROMPT = """
+You are a Recursive Language Model(RLM). Your job is to find the 
+right answer to the query by exploring and interacting with the context using code.
+You will NOT see the full context, you will only see what you ask for and it will be available in the 
+`context` variable. 
 
-ROOT_MODEL = "openrouter/free" 
-# SUB_MODEL  = "google/gemini-3-flash-preview" 
+Available tools:
+- `repl()`: Use this to run and view the output of your code
+- `context`: The full input text
+- `llm_call()`: Use this to call the sub-llm to analyze a chunk
+The sub-llms answer is returned as text and will not enter the context.
+- `final(answer)`: Call this when you have the final answer
 
-def llm_call(prompt:str, system:bool, model:str=ROOT_MODEL, max_tokens:int=4000) -> str:
-    msgs = []
-    if system:
-        msgs.append({"role": "system", "content": system})
-    msgs.append({"role": "user", "content": prompt})
+Strategy:
+1. First, check the size: `print(len(context))`
+2. Peek at the structure: `print(context[:500])`
+3. Use code to search, filter, count, or slice the data
+4. For complex subtasks, use `llm_query()` to delegate to a sub-LLM
+5. When done, call `FINAL(your_answer)`
 
-    r = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
-        json={"model": model, "messages": msgs, "max_tokens": max_tokens}
-    )
-    data = r.json()
-    if "choices" not in data:
-        raise Exception(f"API error: {data}")
-    return data["choices"][0]["message"]["content"]
+Rules:
+- Write ONLY Python code. No markdown, no explanation.
+- Your code block must be wrapped in ```python ... ```
+- Use print() to see results — you only see what you print.
+- Variables persist between steps (like Jupyter cells).
+- Be systematic. Explore first, then solve.
+"""
 
-async def parse_document(file:str):
-    client = AsyncLlamaCloud(api_key=LLAMA_CLOUD_API_KEY)
+class RLM_agent():
 
-    file_obj = await client.files.create(file=file, purpose="parse")
+    def __init__(self, model:str="openrouter/free"):
+        self.OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+        self.LLAMA_CLOUD_API_KEY = os.environ.get("LLAMA_CLOUD_API_KEY")
+        self.model = model
+        self.context = ""
+        self.prompt = RLM_SYSTEM_PROMPT
+    
+        if not self.OPENROUTER_API_KEY or not self.LLAMA_CLOUD_API_KEY:
+            raise ValueError("API keys are missing")
 
-    result = await client.parsing.parse(
-        file_id=file_obj.id,
-        tier="cost_effective",
-        version="latest",
-        expand=["markdown_full", "text_full"],
-    )
-    # print("\nFull text:")
-    # print(result.text_full)
+    def llm_call(self, prompt:str, system:bool, max_tokens:int=4000) -> str:
+        msgs = []
+        if system:
+            msgs.append({"role": "system", "content": system})
+        msgs.append({"role": "user", "content": prompt})
 
-    print("Full markdown:", result.markdown_full)
+        r = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.OPENROUTER_API_KEY}"},
+            json={"model": self.model, "messages": msgs, "max_tokens": max_tokens}
+        )
+        data = r.json()
+        if "choices" not in data:
+            raise Exception(f"API error: {data}")
+        return data["choices"][0]["message"]["content"]
 
-# asyncio.run(parse_document("./Recursive Language Model.pdf"))
+    async def parse_document(self, file:str):
+        client = AsyncLlamaCloud(api_key=self.LLAMA_CLOUD_API_KEY)
 
-def repl(code:str, timeout:int=5) -> str:
-    result = subprocess.run(["python3", "-c", code], capture_output=True, text=True, timeout=timeout)
-    return result.stdout.strip() if result.returncode == 0 else result.stderr
+        file_obj = await client.files.create(file=file, purpose="parse")
 
-start = time.perf_counter()
-repl("print('just checking if this works')")
-end = time.perf_counter()
+        result = await client.parsing.parse(
+            file_id=file_obj.id,
+            tier="cost_effective",
+            version="latest",
+            expand=["markdown_full", "text_full"],
+        )
+        # print("\nFull text:")
+        # print(result.text_full)
 
-print("time taken to repl: ", end-start)
+        print("Full markdown:", result.markdown_full)
+
+    # asyncio.run(parse_document("./Recursive Language Model.pdf"))
+
+    def repl(self, code:str, timeout:int=5) -> str:
+        try:
+            result = subprocess.run(
+                ["python3", "-c", code], 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout
+            )
+            return result.stdout.strip() if result.returncode == 0 else result.stderr
+        except subprocess.TimeoutExpired as e:
+            return f"Timed out after {timeout} seconds"
+
+    # start = time.perf_counter()
+    # repl("print('just checking if this works')")
+    # end = time.perf_counter()
+
+    # print("time taken to repl: ", end-start)
+
+    def final(self, answer:str):
+        print("Response: ", answer)
+    
