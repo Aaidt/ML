@@ -3,7 +3,6 @@ import subprocess
 import requests
 from dotenv import load_dotenv
 from llama_cloud import AsyncLlamaCloud
-# import asyncio
 
 load_dotenv()
 
@@ -74,12 +73,8 @@ class RLM_agent:
             version="latest",
             expand=["markdown_full", "text_full"],
         )
-        # print("\nFull text:")
-        # print(result.text_full)
 
         print("Full markdown:", result.markdown_full)
-
-    # asyncio.run(parse_document("./Recursive Language Model.pdf"))
 
     def _repl(self, code: str, timeout: int = 5) -> str:
         try:
