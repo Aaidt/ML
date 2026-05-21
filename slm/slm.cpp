@@ -23,6 +23,16 @@ std::string decode(std::vector<int> vec, std::map<int, char> idx_to_char) {
    return decoded_str;
 }
 
+std::pair<std::vector<int>, std::vector<int>>
+get_batch(std::string split, int batch_size, int context_length,
+	  std::vector<int> train_data, std::vector<int> test_data) {
+   if (split == "train") {
+      std::vector<int> data = train_data;
+   } else {
+      std::vector<int> data = test_data;
+   }
+}
+
 int main() {
    std::ifstream inputFile("shakespeare.txt");
 
@@ -47,8 +57,21 @@ int main() {
       idx++;
    }
 
-   std::vector<int> res = encode("Hello", char_to_idx);
-   std::cout << decode(res, idx_to_char) << "\n";
+   // std::vector<int> res = encode("Hello", char_to_idx);
+   // std::cout << decode(res, idx_to_char) << "\n";
+
+   std::vector<int> encoded_data = encode(content, char_to_idx);
+
+   std::vector<int> train_data;
+   std::vector<int> test_data;
+
+   float n = 0.9 * encoded_data.size();
+   for (int i = 0; i < n; i++) {
+      train_data.push_back(encoded_data[i]);
+   }
+   for (int i = n; i < encoded_data.size(); i++) {
+      test_data.push_back(encoded_data[i]);
+   }
 
    inputFile.close();
 
