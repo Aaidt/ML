@@ -5,7 +5,23 @@
 #include <string>
 #include <vector>
 
-template <typename T> std::vector<T> encode(std::string s) {}
+std::vector<int> encode(std::string s, std::map<char, int> char_to_idx) {
+   std::vector<int> vec;
+   for (const auto &c : s) {
+      vec.push_back(char_to_idx[c]);
+   }
+
+   return vec;
+}
+
+std::string decode(std::vector<int> vec, std::map<int, char> idx_to_char) {
+   std::string decoded_str;
+   for (const auto &x : vec) {
+      decoded_str += idx_to_char[x];
+   }
+
+   return decoded_str;
+}
 
 int main() {
    std::ifstream inputFile("shakespeare.txt");
@@ -21,17 +37,18 @@ int main() {
    std::set<char> vocab(content.begin(), content.end());
    std::cout << "Vocab size: " << vocab.size() << "\n";
 
-   std::map<int, char> char_to_idx;
+   std::map<int, char> idx_to_char;
+   std::map<char, int> char_to_idx;
 
    int idx = 0;
    for (const char &c : vocab) {
-      char_to_idx[idx] = c;
+      idx_to_char[idx] = c;
+      char_to_idx[c] = idx;
       idx++;
    }
 
-   for (const auto &[key, value] : char_to_idx) {
-      std::cout << key << "->" << value << "\n";
-   }
+   std::vector<int> res = encode("Hello", char_to_idx);
+   std::cout << decode(res, idx_to_char) << "\n";
 
    inputFile.close();
 
