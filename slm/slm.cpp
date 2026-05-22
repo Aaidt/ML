@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-std::vector<int> encode(std::string s, std::map<char, int> char_to_idx) {
+std::vector<int> encode(std::string s, std::map<char, int> &char_to_idx) {
    std::vector<int> vec;
    for (const auto &c : s) {
       vec.push_back(char_to_idx[c]);
@@ -14,7 +14,7 @@ std::vector<int> encode(std::string s, std::map<char, int> char_to_idx) {
    return vec;
 }
 
-std::string decode(std::vector<int> vec, std::map<int, char> idx_to_char) {
+std::string decode(std::vector<int> vec, std::map<int, char> &idx_to_char) {
    std::string decoded_str;
    for (const auto &x : vec) {
       decoded_str += idx_to_char[x];
@@ -24,13 +24,11 @@ std::string decode(std::vector<int> vec, std::map<int, char> idx_to_char) {
 }
 
 std::pair<std::vector<int>, std::vector<int>>
-get_batch(std::string split, int batch_size, int context_length,
-	  std::vector<int> train_data, std::vector<int> test_data) {
-   if (split == "train") {
-      std::vector<int> data = train_data;
-   } else {
-      std::vector<int> data = test_data;
-   }
+get_batch(const std::string &split, int batch_size, int context_length,
+	  const std::vector<int> &train_data,
+	  const std::vector<int> &test_data) {
+
+   const std::vector<int> &data = (split == "train") ? train_data : test_data;
 }
 
 int main() {
