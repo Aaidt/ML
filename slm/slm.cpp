@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <random>
 #include <set>
 #include <string>
 #include <vector>
@@ -23,10 +24,48 @@ std::string decode(std::vector<int> vec, std::map<int, char> &idx_to_char) {
    return decoded_str;
 }
 
+class Tensor {
+ private:
+   std::vector<int> data;
+
+ public:
+   Tensor() {}
+
+   Tensor(const std::vector<int> &values) : data(values) {}
+
+   void print() const {
+      std::cout << "[ ";
+      for (const int &x : data) {
+         std::cout << x << " ";
+      }
+      std::cout << "]\n";
+   }
+
+   int size() const { return data.size(); }
+
+   int operator[](int idx) const { return data[idx]; }
+};
+
+namespace torch {
+Tensor randint(int max, int size) {
+   std::mt19937 rng(std::random_device{}());
+
+   std::uniform_int_distribution<int> dist(0, max - 1);
+
+   std::vector<int> result;
+
+   for (int i = 0; i < size; i++) {
+      result.push_back(dist(rng));
+   }
+
+   return Tensor(result);
+}
+} // namespace torch
+
 std::pair<std::vector<int>, std::vector<int>>
 get_batch(const std::string &split, int batch_size, int context_length,
-	  const std::vector<int> &train_data,
-	  const std::vector<int> &test_data) {
+          const std::vector<int> &train_data,
+          const std::vector<int> &test_data) {
 
    const std::vector<int> &data = (split == "train") ? train_data : test_data;
 }
@@ -40,7 +79,7 @@ int main() {
    }
 
    std::string content((std::istreambuf_iterator<char>(inputFile)),
-		       std::istreambuf_iterator<char>());
+                       std::istreambuf_iterator<char>());
 
    std::set<char> vocab(content.begin(), content.end());
    std::cout << "Vocab size: " << vocab.size() << "\n";
