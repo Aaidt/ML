@@ -68,6 +68,8 @@ get_batch(const std::string &split, int batch_size, int context_length,
           const std::vector<int> &test_data) {
 
    const std::vector<int> &data = (split == "train") ? train_data : test_data;
+
+   Tensor ix = torch::randint(data.size() - context_length, batch_size);
 }
 
 int main() {
